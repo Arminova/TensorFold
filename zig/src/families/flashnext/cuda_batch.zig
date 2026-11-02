@@ -539,13 +539,7 @@ pub fn Pass(comptime Tri: type) type {
                     if (self.pending != null) try self.writeback(0, n);
                     try self.pleBlock(lw, ids);
                 }
-                if (hc.fuses(self, lw.attn_hc, n, keep.attn_hc)) {
-                    try hc.writebackNorm(self, lw.attn_hc, 0, n);
-                    try hc.readoutNative(self, lw.attn_hc, 0, n);
-                } else {
-                    try self.writeback(0, n);
-                    try self.readoutKeep(lw.attn_hc, 0, n, keep.attn_hc);
-                }
+                try hc.attnReadout(self, lw.attn_hc, n, keep.attn_hc);
                 self.zero_slices = zs.usable(self.s.part_zero, keep.mix_branch, self.m.collective != null, lw.out.native != null);
                 if (lw.linear) {
                     try self.gdnBlock(lw, layer, wt.linearIndex(layer), keep);
@@ -555,13 +549,7 @@ pub fn Pass(comptime Tri: type) type {
                 if (keep.mix_branch != 0) try self.sumSlices(s.part, keep.mix_branch, true, n * dims, self.out_slices);
                 const sl = zs.slices(self.zero_slices, s.cap, n, self.out_slices);
                 self.zero_slices = false;
-                if (hc.fuses(self, lw.mlp_hc, n, keep.mlp_hc)) {
-                    try self.tri.hcWritebackNorm(s.h, s.h, s.pss, s.part, s.inj, s.dummy, s.dummy, lw.mlp_hc.scale.ptr, s.norm, eps, sl.stride, n, dims, streams, 4, 1, 1, sl.count);
-                    try hc.readoutNative(self, lw.mlp_hc, 0, n);
-                } else {
-                    try self.tri.hcWriteback(s.h, s.h, s.pss, s.part, "*fp32", s.inj, s.dummy, "*bf16", s.dummy, "*bf16", sl.stride, n, dims, streams, 4, 1, 1, sl.count);
-                    try self.readoutKeep(lw.mlp_hc, 0, n, keep.mlp_hc);
-                }
+                try hc.mlpReadout(self, lw.mlp_hc, n, keep.mlp_hc, sl);
                 try self.moeBlockKeep(lw, keep);
                 try self.moeAdds(layer, keep);
                 self.pending = layer;

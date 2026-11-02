@@ -60,3 +60,24 @@ pub fn readoutNative(pass: anytype, hc_w: wt.HcW, r0: usize, n: usize) !void {
     try pass.k.nativeMatmul(pass.stream, act, low, n, up, s.hc_up, s.native_part, .bf16);
     try pass.tri.hcDenseMix(s.hc_up, norm, s.mixed + r0 * dims * 2, s.xsm + r0 * (dims / 32) * 4, n, dims, streams);
 }
+
+/// The attention block's pending writeback and its read-out: fused where fuses() allows, else the two as before.
+pub fn attnReadout(pass: anytype, hc_w: wt.HcW, n: usize, keep: parts.HcKeep) !void {
+    if (fuses(pass, hc_w, n, keep)) {
+        try writebackNorm(pass, hc_w, 0, n);
+        return readoutNative(pass, hc_w, 0, n);
+    }
+    try pass.writeback(0, n);
+    try pass.readoutKeep(hc_w, 0, n, keep);
+}
+
+/// The MoE block's writeback of part over its slices (sl) and its read-out, fused the same way.
+pub fn mlpReadout(pass: anytype, hc_w: wt.HcW, n: usize, keep: parts.HcKeep, sl: anytype) !void {
+    const s = pass.s;
+    if (fuses(pass, hc_w, n, keep)) {
+        try pass.tri.hcWritebackNorm(s.h, s.h, s.pss, s.part, s.inj, s.dummy, s.dummy, hc_w.scale.ptr, s.norm, eps, sl.stride, n, dims, streams, 4, 1, 1, sl.count);
+        return readoutNative(pass, hc_w, 0, n);
+    }
+    try pass.tri.hcWriteback(s.h, s.h, s.pss, s.part, "*fp32", s.inj, s.dummy, "*bf16", s.dummy, "*bf16", sl.stride, n, dims, streams, 4, 1, 1, sl.count);
+    try pass.readoutKeep(hc_w, 0, n, keep);
+}
