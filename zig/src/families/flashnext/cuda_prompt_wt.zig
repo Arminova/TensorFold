@@ -79,6 +79,8 @@ const Shard = struct {
     }
 
     fn close(self: *Shard) void {
+        // A shard may mix loaded tensors with the n-gram table still read at runtime.
+        if (!runtimePages(self.f.names.keys())) self.f.release();
         self.f.close(self.io);
     }
 
@@ -86,6 +88,16 @@ const Shard = struct {
         return self.f.get(name);
     }
 };
+
+fn runtimePages(names: []const []const u8) bool {
+    for (names) |name| if (std.mem.indexOf(u8, name, ".ple_embedding.ngram_embedding.") != null) return true;
+    return false;
+}
+
+/// The final load-only sweep excludes the n-gram table's live mappings.
+pub fn dropPageCache(io: std.Io, dir: []const u8, keep: anytype) void {
+    core.checkpoint.cache.directory(io, dir, keep);
+}
 
 pub const Store = struct {
     gpa: std.mem.Allocator,
@@ -551,4 +563,9 @@ pub fn stitch(gpa: std.mem.Allocator, store: *Store, prefix: []const u8, names: 
 
 test {
     _ = @import("cuda_prompt_wt_test.zig");
+}
+
+test "Flash Next load cache: a mixed PLE shard keeps its runtime pages" {
+    try std.testing.expect(runtimePages(&.{ "language_model.model.norm.weight", "language_model.model.layers.1.ple.ple_embedding.ngram_embedding.shards.0.weight" }));
+    try std.testing.expect(!runtimePages(&.{ "language_model.model.norm.weight", "language_model.mtp.norm.weight" }));
 }

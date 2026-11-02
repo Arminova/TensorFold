@@ -560,3 +560,14 @@ test {
 }
 
 pub const Pg = @import("cuda_glue.zig").Pg;
+
+var readout_rows: ?usize = null;
+
+/// Rows from which a read-out takes the tiles (TF_FLASHNEXT_READOUT_ROWS, default 64, 0 never): same bits, only speed.
+pub fn readoutTileRows() usize {
+    if (readout_rows == null) {
+        const r = if (std.c.getenv("TF_FLASHNEXT_READOUT_ROWS")) |v| std.fmt.parseInt(usize, std.mem.span(v), 10) catch 64 else 64;
+        readout_rows = if (r == 0) std.math.maxInt(usize) else r;
+    }
+    return readout_rows.?;
+}

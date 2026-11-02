@@ -211,7 +211,7 @@ pub fn Pass(comptime Tri: type) type {
                 try self.tri.hcNormalize(h, pss, hc_w.scale.ptr, norm, eps, n, dims, streams);
                 return hc.readoutNative(self, hc_w, r0, n);
             }
-            if (n >= 64 and self.tri.readoutTilesOwned() and std.meta.eql(keep, HcKeep{})) return self.readoutTiles(hc_w, r0, n);
+            if (n >= parts.readoutTileRows() and self.tri.readoutTilesOwned() and std.meta.eql(keep, HcKeep{})) return self.readoutTiles(hc_w, r0, n);
             try self.copy(keep.h, h, n * wide * 2);
             if (hc_sk * n * hc_w.n_down * 4 > s.hc_part_bytes) return error.UnexpectedTensor;
             try self.tri.hcDown(h, pss, hc_w.scale.ptr, norm, hc_w.down.w.ptr, hc_w.down.s.ptr, hc_w.down.b.ptr, s.dn, s.hc_part, eps, n, hc_w.n_down, wide, dims, dims / 256, streams, hc_sk);
